@@ -45,7 +45,23 @@ func TestRequestDefaultHeaders(t *testing.T) {
 }
 
 func TestBasicAuth(t *testing.T) {
-	c := NewClient(NewBasicAuth("hello", "world"))
+	mockHTTP := &github_mock.HttpClient{
+		ActualDo: func(r *http.Request) (*http.Response, error) {
+			if r.Header.Get("Authorization") == "" {
+				t.Error("BasicAuth not set")
+			}
+			return &http.Response{
+				Header: make(http.Header),
+				Body:   ioutil.NopCloser(bytes.NewBufferString("Hello World")),
+			}, nil
+		},
+	}
+	client := &BasicAuthClient{
+		client: mockHTTP,
+		user:   "hello",
+		pass:   "world",
+	}
+	c := NewClient(client)
 	verb := []string{"GET", "PUT", "POST", "DELETE"}
 	url := "https://api.github.com"
 	for i := range verb {
@@ -53,9 +69,7 @@ func TestBasicAuth(t *testing.T) {
 		if err != nil {
 			t.Fatal("Failed NewRequest(): %v", err)
 		}
-		if req.Header.Get("Authorization") == "" {
-			t.Error("BasicAuth not set")
-		}
+		_, _ = c.Do(req)
 	}
 }
 
@@ -124,7 +138,7 @@ func TestRateLimit(t *testing.T) {
 }
 
 func TestClientDo(t *testing.T) {
-	mockHttp := &github_mock.HttpRequestExecutor{
+	mockHTTP := &github_mock.HttpClient{
 		ActualDo: func(req *http.Request) (*http.Response, error) {
 			res := &http.Response{
 				Header: make(http.Header),
@@ -135,8 +149,7 @@ func TestClientDo(t *testing.T) {
 			return res, nil
 		},
 	}
-	c := NewClient(nil)
-	c.client = mockHttp
+	c := NewClient(mockHTTP)
 	req, err := c.NewRequest("GET", "https://api.github.com")
 	if err != nil {
 		t.Fatalf("NewRequest: %v", err)

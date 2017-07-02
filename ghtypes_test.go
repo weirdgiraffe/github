@@ -34,6 +34,15 @@ func TestParseReadme(t *testing.T) {
 	}
 }
 
+func TestParseUser(t *testing.T) {
+	r := bytes.NewBufferString(exampleResponseReadme)
+	var user User
+	err := json.NewDecoder(r).Decode(&user)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 const exampleResponseStarredRepos = `[
     {
         "starred_at": "2017-06-26T19:03:48Z",
@@ -146,4 +155,49 @@ const exampleResponseReadme = `{
         "git": "https://api.github.com/repos/sgur/vim-editorconfig/git/blobs/0cdc1fa1ae5318b32a7b417eda6b4ea19db4272a",
         "html": "https://github.com/sgur/vim-editorconfig/blob/master/README.md"
     }
-} `
+}`
+
+const exampleResponseUser = `{
+    "login": "weirdgiraffe",
+    "id": 8282530,
+    "avatar_url": "https://avatars0.githubusercontent.com/u/8282530?v=3",
+    "gravatar_id": "",
+    "url": "https://api.github.com/users/weirdgiraffe",
+    "html_url": "https://github.com/weirdgiraffe",
+    "followers_url": "https://api.github.com/users/weirdgiraffe/followers",
+    "following_url": "https://api.github.com/users/weirdgiraffe/following{/other_user}",
+    "gists_url": "https://api.github.com/users/weirdgiraffe/gists{/gist_id}",
+    "starred_url": "https://api.github.com/users/weirdgiraffe/starred{/owner}{/repo}",
+    "subscriptions_url": "https://api.github.com/users/weirdgiraffe/subscriptions",
+    "organizations_url": "https://api.github.com/users/weirdgiraffe/orgs",
+    "repos_url": "https://api.github.com/users/weirdgiraffe/repos",
+    "events_url": "https://api.github.com/users/weirdgiraffe/events{/privacy}",
+    "received_events_url": "https://api.github.com/users/weirdgiraffe/received_events",
+    "type": "User",
+    "site_admin": false,
+    "name": null,
+    "company": null,
+    "blog": "",
+    "location": "Berlin",
+    "email": "giraffe@cyberzoo.xyz",
+    "hireable": null,
+    "bio": null,
+    "public_repos": 20,
+    "public_gists": 9,
+    "followers": 1,
+    "following": 12,
+    "created_at": "2014-07-27T16:42:48Z",
+    "updated_at": "2017-04-22T13:26:18Z",
+    "private_gists": 29,
+    "total_private_repos": 0,
+    "owned_private_repos": 0,
+    "disk_usage": 17237,
+    "collaborators": 0,
+    "two_factor_authentication": false,
+    "plan": {
+        "name": "free",
+        "space": 976562499,
+        "collaborators": 0,
+        "private_repos": 0
+    }
+}`

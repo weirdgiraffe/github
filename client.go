@@ -8,6 +8,7 @@
 package github
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -18,7 +19,7 @@ const connectionTimeoutSec = 5
 const defaultUserAgent = "star-giraffe-v0.0"
 const defaultAccept = "application/vnd.github.v3+json"
 
-type HttpRequestExecutor interface {
+type HttpClient interface {
 	Do(r *http.Request) (*http.Response, error)
 }
 
@@ -31,20 +32,19 @@ type nullLogger struct{}
 func (l *nullLogger) Printf(string, ...interface{}) {}
 
 type Client struct {
-	client HttpRequestExecutor
-	auth   Authenticator
+	client HttpClient
 	rate   RateLimit
 	log    Logger
 }
 
-func NewClient(auth Authenticator) *Client {
+func NewClient(client HttpClient) *Client {
+	if client == nil {
+		client = &http.Client{Timeout: connectionTimeoutSec * time.Second}
+	}
 	return &Client{
-		client: &http.Client{
-			Timeout: connectionTimeoutSec * time.Second,
-		},
-		auth: auth,
-		rate: RateLimit{RestLimit: -1},
-		log:  &nullLogger{},
+		client: client,
+		rate:   RateLimit{RestLimit: -1},
+		log:    &nullLogger{},
 	}
 }
 
@@ -59,12 +59,6 @@ func (c *Client) NewRequest(method, url string) (req *http.Request, err error) {
 	}
 	req.Header.Set("User-Agent", defaultUserAgent)
 	req.Header.Set("Accept", defaultAccept)
-	if c.auth != nil {
-		err = c.auth.AddAuth(req)
-		if err != nil {
-			return
-		}
-	}
 	return req, nil
 
 }
@@ -84,6 +78,26 @@ func (c *Client) Do(req *http.Request) (res *http.Response, err error) {
 		return
 	}
 	return res, nil
+}
+
+func (c *Client) User() (user *User, err error) {
+	var req *http.Request
+	req, err = c.NewRequest("GET", "https://api.github.com/user")
+	if err != nil {
+		return
+	}
+	var res *http.Response
+	res, err = c.Do(req)
+	if err != nil {
+		return
+	}
+	defer res.Body.Close()
+	user = new(User)
+	err = json.NewDecoder(res.Body).Decode(user)
+	if err != nil {
+		return
+	}
+	return user, nil
 }
 
 type RatelimitError struct {
@@ -124,25 +138,28 @@ func (r *RateLimit) Update(res *http.Response) (err error) {
 	return nil
 }
 
-type Authenticator interface {
-	AddAuth(r *http.Request) error
-}
-
-type BasicAuth struct {
+type BasicAuthClient struct {
+	client     HttpClient
 	user, pass string
 }
 
-func NewBasicAuth(user, pass string) *BasicAuth {
-	return &BasicAuth{user, pass}
+func NewBasicAuthClient(user, pass string) *BasicAuthClient {
+	return &BasicAuthClient{
+		client: &http.Client{Timeout: connectionTimeoutSec * time.Second},
+		user:   user,
+		pass:   pass,
+	}
 }
 
-func (a *BasicAuth) AddAuth(r *http.Request) error {
+func (a *BasicAuthClient) Do(r *http.Request) (res *http.Response, err error) {
 	if a.user == "" {
-		return fmt.Errorf("BasicAuth: user not set")
+		err = fmt.Errorf("BasicAuth: user not set")
+		return
 	}
 	if a.pass == "" {
-		return fmt.Errorf("BasicAuth: pass not set")
+		err = fmt.Errorf("BasicAuth: pass not set")
+		return
 	}
 	r.SetBasicAuth(a.user, a.pass)
-	return nil
+	return a.client.Do(r)
 }

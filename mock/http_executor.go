@@ -9,10 +9,10 @@ package github_mock
 
 import "net/http"
 
-type HttpRequestExecutor struct {
+type HttpClient struct {
 	ActualDo func(*http.Request) (*http.Response, error)
 }
 
-func (e *HttpRequestExecutor) Do(r *http.Request) (*http.Response, error) {
+func (e *HttpClient) Do(r *http.Request) (*http.Response, error) {
 	return e.ActualDo(r)
 }

@@ -22,7 +22,7 @@ import (
 
 const paginatorMaxPages = 10
 
-var paginatorHttpMock = &github_mock.HttpRequestExecutor{
+var paginatorClient = NewClient(&github_mock.HttpClient{
 	ActualDo: func(req *http.Request) (res *http.Response, err error) {
 		res = &http.Response{
 			Header: make(http.Header),
@@ -49,13 +49,7 @@ var paginatorHttpMock = &github_mock.HttpRequestExecutor{
 		res.Header.Set("Link", fmt.Sprintf("%s, %s", lnext, llast))
 		return res, nil
 	},
-}
-
-var paginatorClient = func() *Client {
-	c := NewClient(nil)
-	c.client = paginatorHttpMock
-	return c
-}()
+})
 
 func TestPaginatorIteration(t *testing.T) {
 	req, err := paginatorClient.NewRequest("GET", "https://api.github.com")
