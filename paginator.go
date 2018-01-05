@@ -48,7 +48,7 @@ func (p *Paginator) Next() (res *http.Response, err error) {
 	q.Set("per_page", strconv.Itoa(p.PerPage))
 	p.req.URL.RawQuery = q.Encode()
 
-	res, err = p.client.Do(p.req)
+	res, err = p.client.HTTP.Do(p.req)
 	if err != nil {
 		return nil, err
 	}

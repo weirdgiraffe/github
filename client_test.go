@@ -8,42 +8,113 @@
 package github
 
 import (
-	"bytes"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"testing"
 	"time"
-
-	"github.com/weirdgiraffe/github/mock"
 )
 
 func TestRequestDefaultHeaders(t *testing.T) {
-	c := NewClient(nil)
-	verb := []string{"GET", "PUT", "POST", "DELETE"}
+	rc := DefaultRequestsCreator{}
 	url := "https://api.github.com"
-	for i := range verb {
-		req, err := c.NewRequest(verb[i], url)
+	expectedAccept := "application/vnd.github.v3+json"
+
+	for _, verb := range []string{"GET", "PUT", "POST", "DELETE"} {
+		req, err := rc.NewRequest(verb, url, nil)
 		if err != nil {
-			t.Fatal("Failed NewRequest(): %v", err)
+			t.Fatal("NewRequest(): %v", err)
 		}
-		if req.Header.Get("User-Agent") != defaultUserAgent {
+
+		ua := req.Header.Get("User-Agent")
+		if ua != UserAgent {
+			t.Errorf("%s unexpected \"User-Agent\" header: expected %q, got %q", verb, UserAgent, ua)
+		}
+
+		ac := req.Header.Get("Accept")
+		if ac != expectedAccept {
+			t.Errorf("%s unexpected \"Accept\" header: expected %q, got %q", verb, expectedAccept, ac)
+		}
+	}
+}
+
+func TestRateLimits(t *testing.T) {
+	expectedResetTime := time.Now().Add(5 * time.Minute)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/good" {
+			w.Header().Set("X-RateLimit-Remaining", "100")
+			w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", resetTime.Unix())
+			w.WriteHeader(http.StatusOK)
+			return
+		)
+		if r.URL.Path == "/bad" {
+			w.Header().Set("X-RateLimit-Remaining", "0")
+			w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", resetTime.Unix())
+			w.WriteHeader(http.StatusOK)
+			return
+		)
+	})
+
+	var tc = []struct {
+		restLimit  int
+		reset      time.Time
+		checkError bool
+	}{
+		{100, time.Now().Add(1 * time.Hour), false},
+		{0, time.Now().Add(1 * time.Hour), true},
+	}
+	for i := range tc {
+		cli := RateLimitedHTTPClient{}
+		err := r.Check()
+		if err != nil {
+			t.Fatalf("testcase[%2d] New Ratelimit check: %v", i, err)
+		}
+		res.Header.Set(
+			"X-RateLimit-Remaining",
+			fmt.Sprintf("%d", tc[i].restLimit),
+		)
+		res.Header.Set(
+			"X-RateLimit-Reset",
+			fmt.Sprintf("%d", tc[i].reset.Unix()),
+		)
+		err = r.Update(res)
+		if err != nil {
+			t.Fatalf("testcase[%2d] Ratelimit update: %v", i, err)
+		}
+		err = r.Check()
+		if tc[i].checkError {
+			if err == nil {
+				t.Errorf("testcase[%2d] No check error, but expected", i)
+			} else {
+				if e := err.(*RatelimitError); e == nil {
+					t.Errorf("testcase[%2d] Unexpected error: %v", i, err)
+				}
+				if e := err.(*RatelimitError); e != nil {
+					if time.Now().Add(e.Timeout).Before(tc[i].reset) {
+						t.Errorf("testcase[%2d] Unexpected timeout: %v", i, e.Timeout)
+					}
+				}
+			}
+		} else {
+			if err != nil {
+				t.Errorf("testcase[%2d] Check error, but unexpected: %v", i, err)
+			}
+		}
+		if r.RestLimit != tc[i].restLimit {
 			t.Errorf(
-				"Unexpected User-Agent header: %s != %s",
-				defaultUserAgent,
-				req.Header.Get("User-Agent"),
+				"testcase[%2d] Ratelimit.RestLimit: %d != %d",
+				i, tc[i].restLimit, r.RestLimit,
 			)
 		}
-		if req.Header.Get("Accept") != defaultAccept {
+		if r.Reset.Unix() != tc[i].reset.Unix() {
 			t.Errorf(
-				"Unexpected Accept header: %s != %s",
-				defaultAccept,
-				req.Header.Get("Accept"),
+				"testcase[%2d] Ratelimit.Reset %v != %v",
+				i, tc[i].reset, r.Reset,
 			)
 		}
 	}
 }
 
+/*
 func TestBasicAuth(t *testing.T) {
 	mockHTTP := &github_mock.HttpClient{
 		ActualDo: func(r *http.Request) (*http.Response, error) {
@@ -57,9 +128,9 @@ func TestBasicAuth(t *testing.T) {
 		},
 	}
 	client := &BasicAuthClient{
-		client: mockHTTP,
-		user:   "hello",
-		pass:   "world",
+		HTTPClient: mockHTTP,
+		user:       "hello",
+		pass:       "world",
 	}
 	c := NewClient(client)
 	verb := []string{"GET", "PUT", "POST", "DELETE"}
@@ -160,3 +231,4 @@ func TestClientDo(t *testing.T) {
 	}
 	res.Body.Close()
 }
+*/
